@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="eStore.Client/eStore.Client.csproj" Id="f520b6a3-6bfb-4ed8-9a6b-65e1bbfdbcac" />
+  <Project Path="eStore.Server/eStore.Server.csproj" />
+  <Project Path="eStore.Shared/eStore.Shared.csproj" Id="22fbfe3b-d7e6-4ae1-955e-13f52dbd3690" />
+  <Project Path="eStore.UnitTests/eStore.UnitTests.csproj" Id="6a47980c-1970-45e4-b2f3-4f7acb720929" />
+</Solution>
