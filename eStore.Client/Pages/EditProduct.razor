@@ -1,0 +1,116 @@
+﻿@page "/products/edit/{Id:guid}"
+@using eStore.Shared.Dtos
+@using eStore.Client.Services.ProductService
+@inject IProductService ProductService
+@inject NavigationManager Nav
+
+<h3>Edit Product</h3>
+
+@if (loading)
+{
+    <p>Loading...</p>
+}
+else if (notFound)
+{
+    <p>Product not found.</p>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <p style="color:red">@error</p>
+    }
+
+    <EditForm Model="model" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div style="max-width:400px">
+            <div>
+                <label>Name</label><br />
+                <InputText class="form-control" @bind-Value="model.Name" />
+            </div>
+
+            <div style="margin-top:10px">
+                <label>Description</label><br />
+                <InputTextArea class="form-control" @bind-Value="model.Description" />
+            </div>
+
+            <div style="margin-top:10px">
+                <label>Price (NOK)</label><br />
+                <InputNumber class="form-control" @bind-Value="priceNok" />
+            </div>
+
+            <div style="margin-top:10px">
+                <label>Active</label>
+                <InputCheckbox @bind-Value="model.IsActive" />
+            </div>
+
+            <button type="submit" style="margin-top:15px">Save</button>
+            <button type="button" style="margin-top:15px; margin-left:10px" @onclick="Cancel">Cancel</button>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool loading = true;
+    private bool notFound;
+    private string? error;
+
+    private ProductUpdateDto model = new() { Currency = "NOK", IsActive = true };
+    private decimal priceNok;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var p = await ProductService.GetProductByIdAsync(Id);
+
+        if (p is null)
+        {
+            notFound = true;
+            loading = false;
+            return;
+        }
+
+        model = new ProductUpdateDto
+        {
+            Name = p.Name,
+            Description = p.Description,
+            PriceOre = p.PriceOre,
+            Currency = p.Currency,
+            IsActive = p.IsActive
+        };
+
+        priceNok = p.PriceOre / 100.0m;
+
+        loading = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            error = null;
+            model.PriceOre = (int)Math.Round(priceNok * 100m);
+
+            var updated = await ProductService.UpdateProductAsync(Id, model);
+            if (updated is null)
+            {
+                notFound = true;
+                return;
+            }
+
+            Nav.NavigateTo($"/products/{Id}");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private void Cancel()
+    {
+        Nav.NavigateTo($"/products/{Id}");
+    }
+}

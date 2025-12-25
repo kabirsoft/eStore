@@ -1,0 +1,67 @@
+﻿@page "/products/create"
+@using eStore.Shared.Dtos
+@using eStore.Client.Services.ProductService
+@inject IProductService ProductService
+@inject NavigationManager Nav
+
+<h3>Create Product</h3>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <p style="color:red">@error</p>
+}
+
+<EditForm Model="model" OnValidSubmit="HandleSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div style="max-width:400px">
+        <div>
+            <label>Name</label><br />
+            <InputText class="form-control" @bind-Value="model.Name" />
+        </div>
+
+        <div style="margin-top:10px">
+            <label>Description</label><br />
+            <InputTextArea class="form-control" @bind-Value="model.Description" />
+        </div>
+
+        <div style="margin-top:10px">
+            <label>Price (NOK)</label><br />
+            <InputNumber class="form-control" @bind-Value="priceNok" />
+        </div>
+
+        <div style="margin-top:10px">
+            <label>Active</label>
+            <InputCheckbox @bind-Value="model.IsActive" />
+        </div>
+
+        <button type="submit" style="margin-top:15px">Create</button>
+    </div>
+</EditForm>
+
+@code {
+    private ProductCreateDto model = new() { Currency = "NOK", IsActive = true };
+    private decimal priceNok;
+    private string? error;
+
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            error = null;
+
+            // convert NOK -> øre
+            model.PriceOre = (int)Math.Round(priceNok * 100m);
+
+            var created = await ProductService.CreateProductAsync(model);
+
+            // go to details page
+            Nav.NavigateTo($"/products/{created.Id}");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+}
