@@ -1,4 +1,5 @@
 using eStore.Server.Data;
+using eStore.Server.Services.OrderService;
 using eStore.Server.Services.ProductService;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,17 +10,13 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DbConnection")));
 //--------- End Database --------
 
-// Add services to the container.
+//------ Add services to the container. --------
 builder.Services.AddControllers();
-
-// Swagger (OpenAPI) + Swagger UI
-builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddEndpointsApiExplorer(); // Swagger (OpenAPI) + Swagger UI
 builder.Services.AddSwaggerGen();
-
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 // ---------------------------------------
-
-
 //--------- CORS --------
 var clientBaseUrl = builder.Configuration["ClientBaseUrl"];
 

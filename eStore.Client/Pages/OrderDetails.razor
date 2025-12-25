@@ -1,0 +1,38 @@
+﻿@page "/orders/{Id:guid}"
+@using eStore.Shared.Dtos
+@using eStore.Client.Services.OrderService
+@inject IOrderService OrderService
+
+<h3>Order Details</h3>
+
+@if (order is null && !notFound)
+{
+    <p>Loading...</p>
+}
+else if (notFound)
+{
+    <p>Order not found.</p>
+}
+else
+{
+    <p><strong>OrderId:</strong> @order!.Id</p>
+    <p><strong>Product:</strong> @order.ProductName</p>
+    <p><strong>Quantity:</strong> @order.Quantity</p>
+    <p><strong>Total:</strong> @(order.TotalOre / 100.0m) @order.Currency</p>
+    <p><strong>Status:</strong> @order.Status</p>
+    <p><strong>Customer:</strong> @order.CustomerName (@order.CustomerEmail)</p>
+    <p><strong>Created:</strong> @order.CreatedUtc</p>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private OrderDto? order;
+    private bool notFound;
+
+    protected override async Task OnInitializedAsync()
+    {
+        order = await OrderService.GetOrderByIdAsync(Id);
+        notFound = order is null;
+    }
+}
