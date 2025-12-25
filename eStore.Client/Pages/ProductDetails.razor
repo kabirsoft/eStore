@@ -1,0 +1,36 @@
+﻿@page "/products/{Id:guid}"
+@using eStore.Shared.Dtos
+@using eStore.Client.Services.ProductService
+@inject IProductService ProductService
+
+<h3>Product Details</h3>
+
+@if (product is null && !notFound)
+{
+    <p>Loading...</p>
+}
+else if (notFound)
+{
+    <p>Product not found.</p>
+}
+else
+{
+    <h4>@product!.Name</h4>
+    <p>@product.Description</p>
+    <p><strong>Price:</strong> @(product.PriceOre / 100.0m) @product.Currency</p>
+    <p><strong>Active:</strong> @product.IsActive</p>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ProductDto? product;
+    private bool notFound;
+
+    protected override async Task OnInitializedAsync()
+    {
+        product = await ProductService.GetProductByIdAsync(Id);
+        notFound = product is null;
+    }
+}
+

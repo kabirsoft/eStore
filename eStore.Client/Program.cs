@@ -1,4 +1,5 @@
 using eStore.Client;
+using eStore.Client.Services.ProductService;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -6,6 +7,13 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
-
+//Base address from configuration, Configure HttpClient for server communication
+var serverBaseAddress = builder.Configuration["ServerBaseAddress"]
+    ?? throw new InvalidOperationException("Missing config: ServerBaseAddress");
+builder.Services.AddScoped(_ => new HttpClient
+{
+    BaseAddress = new Uri(serverBaseAddress)
+});
+//------------------------------------------
+builder.Services.AddScoped<IProductService, ProductService>();
 await builder.Build().RunAsync();
