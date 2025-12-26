@@ -17,6 +17,8 @@ builder.Services.AddScoped(_ => new HttpClient
     BaseAddress = new Uri(serverBaseAddress)
 });
 //------------------------------------------
+
+//------ Register application services ------
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
