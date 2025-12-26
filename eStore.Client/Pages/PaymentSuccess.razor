@@ -1,0 +1,9 @@
+﻿@page "/payment/success"
+@using Microsoft.AspNetCore.Components
+
+<h3>Payment Success</h3>
+<p>Thanks! Stripe redirected back successfully.</p>
+
+@code {
+    [Parameter, SupplyParameterFromQuery] public string? OrderId { get; set; }
+}

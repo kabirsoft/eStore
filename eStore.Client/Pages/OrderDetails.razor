@@ -1,7 +1,11 @@
 ﻿@page "/orders/{Id:guid}"
 @using eStore.Shared.Dtos
 @using eStore.Client.Services.OrderService
+@using eStore.Client.Services.PaymentService
+
+@inject IPaymentService PaymentService
 @inject IOrderService OrderService
+@inject NavigationManager Nav
 
 <h3>Order Details</h3>
 
@@ -24,6 +28,8 @@ else
     <p><strong>Created:</strong> @order.CreatedUtc</p>
 }
 
+<button @onclick="PayWithStripe">Pay with card (Stripe)</button>
+
 @code {
     [Parameter] public Guid Id { get; set; }
 
@@ -35,4 +41,12 @@ else
         order = await OrderService.GetOrderByIdAsync(Id);
         notFound = order is null;
     }
+
+    private async Task PayWithStripe()
+    {
+        if (order is null) return;
+        var url = await PaymentService.CreateStripeCheckoutUrlAsync(order.Id);
+        Nav.NavigateTo(url, forceLoad: true); // redirects to Stripe
+    }
+
 }
