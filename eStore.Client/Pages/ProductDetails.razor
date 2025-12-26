@@ -1,9 +1,7 @@
 ﻿@page "/products/{Id:guid}"
 @using eStore.Shared.Dtos
-@using eStore.Client.Services.OrderService
 @using eStore.Client.Services.ProductService
 @inject IProductService ProductService
-@inject IOrderService OrderService
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -23,39 +21,11 @@ else
     <p>@product.Description</p>
     <p><strong>Price:</strong> @(product.PriceOre / 100.0m) @product.Currency</p>
     <p><strong>Active:</strong> @product.IsActive</p>
-    <hr />
-    <h4>Buy (no payment yet)</h4>
 
-    @if (!string.IsNullOrWhiteSpace(buyError))
-    {
-        <p style="color:red">@buyError</p>
-    }
-    @if (!string.IsNullOrWhiteSpace(successMsg))
-    {
-        <p style="color:green">@successMsg</p>
-    }
+    <p style="margin-top:15px">
+        <a href="/checkout/@product!.Id">Buy</a>
+    </p>
 
-    <div style="max-width:400px">
-        <div>
-            <label>Quantity</label><br />
-            <InputNumber class="form-control" @bind-Value="quantity" />
-        </div>
-
-        <div style="margin-top:10px">
-            <label>Your name</label><br />
-            <InputText class="form-control" @bind-Value="customerName" />
-        </div>
-
-        <div style="margin-top:10px">
-            <label>Your email</label><br />
-            <InputText class="form-control" @bind-Value="customerEmail" />
-        </div>
-
-        <button style="margin-top:15px" @onclick="CreateOrder">Create order</button>
-    </div>
-
-
-    <!-- Delete the product -->
     <p style="margin-top:15px">
         <a href="/products/edit/@product!.Id">Edit</a>
         <button style="margin-left:10px" @onclick="Delete">Delete</button>
@@ -67,11 +37,6 @@ else
 
     private ProductDto? product;
     private bool notFound;
-    private int quantity = 1;
-    private string customerName = "";
-    private string customerEmail = "";
-    private string? buyError;
-    private string? successMsg;
 
     protected override async Task OnInitializedAsync()
     {
@@ -79,41 +44,13 @@ else
         notFound = product is null;
     }
 
-    private async Task CreateOrder()
-    {
-        if (product is null) return;
-
-        try
-        {
-            buyError = null;
-            successMsg = null;
-
-            var dto = new eStore.Shared.Dtos.OrderCreateDto
-            {
-                ProductId = product.Id,
-                Quantity = quantity,
-                CustomerName = customerName,
-                CustomerEmail = customerEmail
-            };
-
-            var created = await OrderService.CreateOrderAsync(dto);
-
-            // go to order page
-            Nav.NavigateTo($"/orders/{created.Id}");
-        }
-        catch (Exception ex)
-        {
-            buyError = ex.Message;
-        }
-    }
-
     private async Task Delete()
     {
         if (product is null) return;
 
         var confirmed = await JS.InvokeAsync<bool>(
-        "confirm",
-        $"Are you sure you want to delete '{product.Name}'?");
+            "confirm",
+            $"Are you sure you want to delete '{product.Name}'?");
 
         if (!confirmed)
             return;
@@ -123,4 +60,3 @@ else
             Nav.NavigateTo("/products");
     }
 }
-

@@ -1,0 +1,112 @@
+﻿@page "/checkout/{ProductId:guid}"
+@using eStore.Shared.Dtos
+@using eStore.Client.Services.ProductService
+@using eStore.Client.Services.OrderService
+@inject IProductService ProductService
+@inject IOrderService OrderService
+@inject NavigationManager Nav
+
+<h3>Checkout</h3>
+
+@if (loading)
+{
+    <p>Loading...</p>
+}
+else if (product is null)
+{
+    <p>Product not found.</p>
+}
+else
+{
+    <h4>@product.Name</h4>
+    <p>@product.Description</p>
+
+    <p>
+        <strong>Unit price:</strong> @(product.PriceOre / 100.0m) @product.Currency
+    </p>
+
+    <hr />
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <p style="color:red">@error</p>
+    }
+
+    <div style="max-width:420px">
+        <div>
+            <label>Quantity</label><br />
+            <InputNumber class="form-control" @bind-Value="quantity" />
+        </div>
+
+        <div style="margin-top:10px">
+            <label>Your name</label><br />
+            <InputText class="form-control" @bind-Value="customerName" />
+        </div>
+
+        <div style="margin-top:10px">
+            <label>Your email</label><br />
+            <InputText class="form-control" @bind-Value="customerEmail" />
+        </div>
+
+        <div style="margin-top:15px">
+            <strong>Total:</strong> @(TotalNok) @product.Currency
+        </div>
+
+        <button style="margin-top:15px" @onclick="PlaceOrder">Place order</button>
+        <button style="margin-top:15px; margin-left:10px" @onclick="Cancel">Cancel</button>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProductId { get; set; }
+
+    private bool loading = true;
+    private ProductDto? product;
+
+    private int quantity = 1;
+    private string customerName = "";
+    private string customerEmail = "";
+    private string? error;
+
+    private decimal TotalNok =>
+        product is null ? 0 : (product.PriceOre / 100.0m) * quantity;
+
+    protected override async Task OnInitializedAsync()
+    {
+        product = await ProductService.GetProductByIdAsync(ProductId);
+        loading = false;
+    }
+
+    private async Task PlaceOrder()
+    {
+        if (product is null) return;
+
+        try
+        {
+            error = null;
+
+            var dto = new OrderCreateDto
+            {
+                ProductId = product.Id,
+                Quantity = quantity,
+                CustomerName = customerName,
+                CustomerEmail = customerEmail
+            };
+
+            var created = await OrderService.CreateOrderAsync(dto);
+
+            // Next step (later): go to payment selection page
+            Nav.NavigateTo($"/orders/{created.Id}");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    private void Cancel()
+    {
+        Nav.NavigateTo($"/products/{ProductId}");
+    }
+}
+
