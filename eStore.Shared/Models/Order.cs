@@ -22,6 +22,13 @@ namespace eStore.Shared.Models
 
         public string Status { get; set; } = "Created"; // later: Paid, Failed, Cancelled
 
+        // Payment info
+        public string PaymentProvider { get; set; } = "None"; // None, Stripe, Vipps
+        public string PaymentStatus { get; set; } = "Unpaid"; // Unpaid, Pending, Paid, Failed
+        public string? PaymentReference { get; set; }         // provider reference/transaction id
+        public DateTime? PaidUtc { get; set; }
+        // end Payment info
+
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     }
 }

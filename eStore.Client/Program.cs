@@ -1,5 +1,6 @@
 using eStore.Client;
 using eStore.Client.Services.OrderService;
+using eStore.Client.Services.PaymentService;
 using eStore.Client.Services.ProductService;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
@@ -16,7 +17,10 @@ builder.Services.AddScoped(_ => new HttpClient
     BaseAddress = new Uri(serverBaseAddress)
 });
 //------------------------------------------
+
+//------ Register application services ------
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
 
 await builder.Build().RunAsync();

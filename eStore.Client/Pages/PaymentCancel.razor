@@ -1,0 +1,9 @@
+﻿@page "/payment/cancel"
+@using Microsoft.AspNetCore.Components
+
+<h3>Payment Cancelled</h3>
+<p>You cancelled the payment.</p>
+
+@code {
+    [Parameter, SupplyParameterFromQuery] public string? OrderId { get; set; }
+}
