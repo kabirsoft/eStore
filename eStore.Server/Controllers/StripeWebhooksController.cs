@@ -9,14 +9,14 @@ namespace eStore.Server.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class WebhooksController : ControllerBase
+    public class StripeWebhooksController : ControllerBase
     {
 
         private readonly AppDbContext _db;
         private readonly IConfiguration _config;
-        private readonly ILogger<WebhooksController> _logger;
+        private readonly ILogger<StripeWebhooksController> _logger;
 
-        public WebhooksController(AppDbContext db, IConfiguration config, ILogger<WebhooksController> logger)
+        public StripeWebhooksController(AppDbContext db, IConfiguration config, ILogger<StripeWebhooksController> logger)
         {
             _db = db;
             _config = config;

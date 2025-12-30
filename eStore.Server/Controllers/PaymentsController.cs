@@ -1,11 +1,14 @@
 ﻿using eStore.Server.Data;
+using eStore.Server.Payments.Vipps;
+using eStore.Server.Services.PaymentOrchestrator;
 using eStore.Shared.Dtos;
+using eStore.Shared.Enums;
 using eStore.Shared.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Stripe;
 using Stripe.Checkout;
-using Microsoft.EntityFrameworkCore;
 
 namespace eStore.Server.Controllers
 {
@@ -15,11 +18,20 @@ namespace eStore.Server.Controllers
     {
         private readonly AppDbContext _db;
         private readonly IConfiguration _config;
+        private readonly IPaymentOrchestrator _payments;
 
-        public PaymentsController(AppDbContext db, IConfiguration config)
+        public PaymentsController(AppDbContext db, IConfiguration config, IPaymentOrchestrator payments)
         {
             _db = db;
             _config = config;
+            _payments = payments;
+        }
+
+        [HttpPost("create")]
+        public async Task<ActionResult<CreatePaymentResponse>> Create(CreatePaymentRequest req)
+        {
+            var url = await _payments.CreateCheckoutAsync(req.OrderId, req.Provider);
+            return Ok(new CreatePaymentResponse(url));
         }
 
         [HttpPost("stripe/create-checkout-session")]
@@ -99,6 +111,26 @@ namespace eStore.Server.Controllers
             await _db.SaveChangesAsync();
 
             return Ok(new StripeCheckoutSessionDto { Url = session.Url });
+        }
+
+        [HttpGet("vipps/poll")]
+        public async Task<ActionResult<object>> PollVipps([FromQuery] Guid orderId, [FromServices] VippsEpaymentClient vipps)
+        {
+            var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+            if (order is null) return NotFound("Order not found.");
+
+            if (order.PaymentProvider != "Vipps" || string.IsNullOrWhiteSpace(order.PaymentReference))
+                return BadRequest("Order is not a Vipps payment.");
+
+            var reference = order.PaymentReference;
+
+            using var doc = await vipps.GetPaymentAsync(reference);
+
+            // Status field name depends on Vipps response; we keep raw json + you can map later
+            // For UI you can just display the json or pick doc.RootElement.GetProperty("state") etc.
+            var raw = doc.RootElement.GetRawText();
+
+            return Ok(new { reference, raw });
         }
     }
 }
