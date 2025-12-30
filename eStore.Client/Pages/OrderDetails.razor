@@ -31,6 +31,8 @@ else
 
 <button @onclick="PayWithStripe">Pay with card (Stripe)</button>
 <button style="margin-left:10px" @onclick="PayWithVipps">Pay with Vipps</button>
+<button style="margin-left:10px" @onclick="PayWithPayPal">PayPal</button>
+
 
 <p style="margin-top:15px">
     <a href="/products">Back to products</a>
@@ -64,5 +66,12 @@ else
         Nav.NavigateTo(url, forceLoad: true);
     }
 
+    private async Task PayWithPayPal()
+    {
+        if (order is null) return;
+
+        var url = await PaymentService.CreateCheckoutUrlAsync(order.Id, PaymentProvider.PayPal);
+        Nav.NavigateTo(url, forceLoad: true);
+    }
 
 }

@@ -5,6 +5,7 @@ using eStore.Server.Services.PaymentOrchestrator;
 using eStore.Server.Services.ProductService;
 using Microsoft.EntityFrameworkCore;
 using eStore.Server.Payments.Vipps;
+using eStore.Server.Payments.PayPal;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +34,23 @@ builder.Services.AddHttpClient<VippsEpaymentClient>(c =>
 });
 //----------------
 
+//---------- PayPal Configuration --------
+var payPalOpt = new PayPalOptions();
+builder.Configuration.GetSection("PayPal").Bind(payPalOpt);
+builder.Services.AddSingleton(payPalOpt);
+
+// PayPal HttpClients
+builder.Services.AddHttpClient<PayPalAccessTokenService>(c =>
+{
+    c.BaseAddress = new Uri(payPalOpt.BaseUrl);
+});
+builder.Services.AddHttpClient<PayPalCheckoutClient>(c =>
+{
+    c.BaseAddress = new Uri(payPalOpt.BaseUrl);
+});
+
+//---------------------------------------
+
 //------ Add services to the container. --------
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer(); // Swagger (OpenAPI) + Swagger UI
@@ -44,6 +62,10 @@ builder.Services.AddScoped<IPaymentProvider, StripePaymentProvider>(); // Stripe
 if (vippsOpt.IsConfigured)
 {
     builder.Services.AddScoped<IPaymentProvider, VippsPaymentProvider>(); // Vipps payment provider
+}
+if (payPalOpt.IsConfigured)
+{
+    builder.Services.AddScoped<IPaymentProvider, PayPalPaymentProvider>();
 }
 
 builder.Services.AddScoped<IPaymentOrchestrator, PaymentOrchestrator>();

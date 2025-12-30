@@ -20,15 +20,11 @@ else
     <h4>@product!.Name</h4>
     <p>@product.Description</p>
     <p><strong>Price:</strong> @(product.PriceOre / 100.0m) @product.Currency</p>
-    <p><strong>Active:</strong> @product.IsActive</p>
-
-   @*  <p style="margin-top:15px">
-        <a href="/checkout/@product!.Id">Pay with card (Stripe)</a>
-        <button @onclick="GoToCheckout">Pay with card (Stripe)</button>
-    </p> *@
+    <p><strong>Active:</strong> @product.IsActive</p> 
 
     <p style="margin-top:15px">
-        <a href="/checkout/@product!.Id">Buy / Checkout</a>
+        <a href="/checkout/@product!.Id">Buy</a>
+        @* <button @onclick="GoToCheckout">Buy</button> *@
     </p>
 
 

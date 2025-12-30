@@ -7,7 +7,8 @@ namespace eStore.Shared.Enums
     public enum PaymentProvider
     {
         Stripe = 1,
-        Vipps = 2
+        Vipps = 2,
+        PayPal = 3
     }
     public record CreatePaymentRequest(Guid OrderId, PaymentProvider Provider);
     public record CreatePaymentResponse(string RedirectUrl);
