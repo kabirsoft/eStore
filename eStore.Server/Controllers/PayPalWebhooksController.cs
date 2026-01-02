@@ -39,15 +39,30 @@ namespace eStore.Server.Controllers
         {
             try
             {
-                var body = await new StreamReader(Request.Body).ReadToEndAsync();
+                using var reader = new StreamReader(Request.Body);
+                var body = await reader.ReadToEndAsync();
+
+                _logger.LogInformation("PayPal webhook received. Body length: {Length}", body.Length);
+                _logger.LogDebug("PayPal webhook body: {Body}", body);
+
                 var webhookId = _config["PayPal:WebhookId"];
                 if (string.IsNullOrWhiteSpace(webhookId))
                     return StatusCode(500, "Missing PayPal:WebhookId");
 
-                if (!await VerifyPayPalSignatureAsync(body, webhookId))
+                var verifySignature = _config["PayPal:VerifyWebhookSignature"] != "false";
+
+                if (verifySignature)
                 {
-                    _logger.LogWarning("PayPal webhook signature verification failed");
-                    return BadRequest();
+                    var verified = await VerifyPayPalSignatureAsync(body, webhookId);
+                    if (!verified)
+                    {
+                        _logger.LogWarning("PayPal webhook signature verification failed");
+                        return BadRequest("Signature verification failed");
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("PayPal webhook signature verification is DISABLED (sandbox mode)");
                 }
 
                 using var doc = JsonDocument.Parse(body);
@@ -116,49 +131,61 @@ namespace eStore.Server.Controllers
 
         private async Task<bool> VerifyPayPalSignatureAsync(string body, string webhookId)
         {
-            var token = Request.Headers["PAYPAL-TRANSMISSION-ID"].ToString();
-            var time = Request.Headers["PAYPAL-TRANSMISSION-TIME"].ToString();
-            var sig = Request.Headers["PAYPAL-TRANSMISSION-SIG"].ToString();
-            var certUrl = Request.Headers["PAYPAL-CERT-URL"].ToString();
-            var algo = Request.Headers["PAYPAL-AUTH-ALGO"].ToString();
-
-            var accessTokenValue = await _tokens.GetAccessTokenAsync();
-
-            var payload = new
+            try
             {
-                auth_algo = algo,
-                cert_url = certUrl,
-                transmission_id = token,
-                transmission_sig = sig,
-                transmission_time = time,
-                webhook_id = webhookId,
-                webhook_event = JsonSerializer.Deserialize<object>(body)
-            };
+                var token = Request.Headers["PAYPAL-TRANSMISSION-ID"].ToString();
+                var time = Request.Headers["PAYPAL-TRANSMISSION-TIME"].ToString();
+                var sig = Request.Headers["PAYPAL-TRANSMISSION-SIG"].ToString();
+                var certUrl = Request.Headers["PAYPAL-CERT-URL"].ToString();
+                var algo = Request.Headers["PAYPAL-AUTH-ALGO"].ToString();
 
-            var req = new HttpRequestMessage(HttpMethod.Post,
-                $"{_opt.BaseUrl.TrimEnd('/')}/v1/notifications/verify-webhook-signature");
+                var accessTokenValue = await _tokens.GetAccessTokenAsync();
 
-            req.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessTokenValue);
+                var payload = new
+                {
+                    auth_algo = algo,
+                    cert_url = certUrl,
+                    transmission_id = token,
+                    transmission_sig = sig,
+                    transmission_time = time,
+                    webhook_id = webhookId,
+                    webhook_event = JsonSerializer.Deserialize<object>(body)
+                };
 
-            req.Content = JsonContent.Create(payload);
+                var req = new HttpRequestMessage(HttpMethod.Post,
+                    $"{_opt.BaseUrl.TrimEnd('/')}/v1/notifications/verify-webhook-signature");
 
-            var resp = await _http.SendAsync(req);
-            var json = await resp.Content.ReadAsStringAsync();
+                req.Headers.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessTokenValue);
 
-            _logger.LogInformation("PayPal verify response. Status={Status} Body={Body}", (int)resp.StatusCode, json);
+                req.Content = JsonContent.Create(payload);
 
-            // If PayPal returns 400/401/etc, signature is NOT verified
-            if (!resp.IsSuccessStatusCode)
+                var resp = await _http.SendAsync(req);
+                var json = await resp.Content.ReadAsStringAsync();
+
+                _logger.LogInformation("PayPal verify response. Status={Status} Body={Body}", (int)resp.StatusCode, json);
+
+                // If PayPal returns 400/401/etc, signature is NOT verified
+                if (!resp.IsSuccessStatusCode)
+                    return false;
+
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("verification_status", out var verificationStatus))
+                {
+                    var status = verificationStatus.GetString();
+                    _logger.LogInformation("PayPal verification status: {Status}", status);
+                    return status == "SUCCESS";
+                }
+
+                _logger.LogWarning("PayPal verification response missing 'verification_status' property");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error verifying PayPal webhook signature");
                 return false;
 
-            using var doc = JsonDocument.Parse(json);
-
-            if (!doc.RootElement.TryGetProperty("verification_status", out var vs))
-                return false;
-
-            return string.Equals(vs.GetString(), "SUCCESS", StringComparison.OrdinalIgnoreCase);
-
+            }
         }
     }
 }
