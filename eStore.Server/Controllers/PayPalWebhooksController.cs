@@ -1,8 +1,9 @@
 ﻿using eStore.Server.Data;
+using eStore.Server.Payments.PayPal;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace eStore.Server.Controllers
 {
@@ -14,75 +15,103 @@ namespace eStore.Server.Controllers
         private readonly IConfiguration _config;
         private readonly ILogger<PayPalWebhooksController> _logger;
         private readonly HttpClient _http;
+        private readonly PayPalAccessTokenService _tokens;
+        private readonly PayPalOptions _opt;
 
         public PayPalWebhooksController(
             AppDbContext db,
             IConfiguration config,
             ILogger<PayPalWebhooksController> logger,
-            IHttpClientFactory httpFactory)
+            IHttpClientFactory httpFactory,
+            PayPalAccessTokenService tokens,
+            PayPalOptions opt)
         {
             _db = db;
             _config = config;
             _logger = logger;
             _http = httpFactory.CreateClient();
+            _tokens = tokens;
+            _opt = opt;
         }
 
         [HttpPost]
         public async Task<IActionResult> Handle()
         {
-            var body = await new StreamReader(Request.Body).ReadToEndAsync();
-            var webhookId = _config["PayPal:WebhookId"];
-            if (string.IsNullOrWhiteSpace(webhookId))
-                return StatusCode(500, "Missing PayPal:WebhookId");
-
-            if (!await VerifyPayPalSignatureAsync(body, webhookId))
+            try
             {
-                _logger.LogWarning("PayPal webhook signature verification failed");
-                return BadRequest();
-            }
+                var body = await new StreamReader(Request.Body).ReadToEndAsync();
+                var webhookId = _config["PayPal:WebhookId"];
+                if (string.IsNullOrWhiteSpace(webhookId))
+                    return StatusCode(500, "Missing PayPal:WebhookId");
 
-            using var doc = JsonDocument.Parse(body);
-            var eventType = doc.RootElement.GetProperty("event_type").GetString();
-
-            if (eventType == "PAYMENT.CAPTURE.COMPLETED")
-            {
-                var resource = doc.RootElement.GetProperty("resource");
-
-                // custom_id = orderId (we set this earlier)
-                var orderIdStr = resource
-                    .GetProperty("supplementary_data")
-                    .GetProperty("related_ids")
-                    .GetProperty("order_id")
-                    .GetString();
-
-                if (!Guid.TryParse(orderIdStr, out var orderId))
+                if (!await VerifyPayPalSignatureAsync(body, webhookId))
                 {
-                    _logger.LogWarning("PayPal webhook: invalid orderId");
-                    return Ok();
+                    _logger.LogWarning("PayPal webhook signature verification failed");
+                    return BadRequest();
                 }
 
-                var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
-                if (order == null || order.PaymentStatus == "Paid")
+                using var doc = JsonDocument.Parse(body);
+                if (!doc.RootElement.TryGetProperty("event_type", out var et))
                     return Ok();
 
-                order.PaymentProvider = "PayPal";
-                order.PaymentStatus = "Paid";
-                order.PaidUtc = DateTime.UtcNow;
-                order.Status = "Completed";
+                var eventType = et.GetString();
 
-                var tx = await _db.PaymentTransactions
-                    .FirstOrDefaultAsync(t => t.OrderId == order.Id && t.Provider == "PayPal");
-
-                if (tx != null)
+                if (eventType == "PAYMENT.CAPTURE.COMPLETED")
                 {
-                    tx.Status = "Succeeded";
-                    tx.UpdatedUtc = DateTime.UtcNow;
+                    var resource = doc.RootElement.GetProperty("resource");
+
+                    string? orderIdStr = null;
+
+                    // Preferred: resource.custom_id
+                    if (resource.TryGetProperty("custom_id", out var customIdEl))
+                        orderIdStr = customIdEl.GetString();
+
+                    // Fallback: sometimes custom_id might live elsewhere depending on event structure
+                    if (string.IsNullOrWhiteSpace(orderIdStr) &&
+                         resource.TryGetProperty("purchase_units", out var pus) &&
+                         pus.ValueKind == JsonValueKind.Array &&
+                         pus.GetArrayLength() > 0 &&
+                         pus[0].TryGetProperty("custom_id", out var puCustom))
+                    {
+                        orderIdStr = puCustom.GetString();
+                    }
+
+                    _logger.LogInformation("PayPal webhook received. event_type={EventType}, custom_id={CustomId}", eventType, orderIdStr);
+
+                    if (!Guid.TryParse(orderIdStr, out var orderId))
+                    {
+                        _logger.LogWarning("PayPal webhook: missing/invalid custom_id orderId. custom_id={CustomId}", orderIdStr);
+                        return Ok();
+                    }
+
+                    var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+                    if (order == null || order.PaymentStatus == "Paid")
+                        return Ok();
+
+                    order.PaymentProvider = "PayPal";
+                    order.PaymentStatus = "Paid";
+                    order.PaidUtc = DateTime.UtcNow;
+                    order.Status = "Completed";
+
+                    var tx = await _db.PaymentTransactions
+                        .FirstOrDefaultAsync(t => t.OrderId == order.Id && t.Provider == "PayPal");
+
+                    if (tx != null)
+                    {
+                        tx.Status = "Succeeded";
+                        tx.UpdatedUtc = DateTime.UtcNow;
+                    }
+
+                    await _db.SaveChangesAsync();
                 }
 
-                await _db.SaveChangesAsync();
+                return Ok();
             }
-
-            return Ok();
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unhandled exception in PayPal webhook");
+                return StatusCode(500);
+            }
         }
 
         private async Task<bool> VerifyPayPalSignatureAsync(string body, string webhookId)
@@ -93,7 +122,7 @@ namespace eStore.Server.Controllers
             var certUrl = Request.Headers["PAYPAL-CERT-URL"].ToString();
             var algo = Request.Headers["PAYPAL-AUTH-ALGO"].ToString();
 
-            var accessToken = await GetPayPalAccessTokenAsync();
+            var accessTokenValue = await _tokens.GetAccessTokenAsync();
 
             var payload = new
             {
@@ -107,24 +136,29 @@ namespace eStore.Server.Controllers
             };
 
             var req = new HttpRequestMessage(HttpMethod.Post,
-                "https://api-m.sandbox.paypal.com/v1/notifications/verify-webhook-signature");
+                $"{_opt.BaseUrl.TrimEnd('/')}/v1/notifications/verify-webhook-signature");
 
             req.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessTokenValue);
 
             req.Content = JsonContent.Create(payload);
 
             var resp = await _http.SendAsync(req);
             var json = await resp.Content.ReadAsStringAsync();
 
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.GetProperty("verification_status").GetString() == "SUCCESS";
-        }
+            _logger.LogInformation("PayPal verify response. Status={Status} Body={Body}", (int)resp.StatusCode, json);
 
-        private async Task<string> GetPayPalAccessTokenAsync()
-        {
-            // reuse your existing PayPalAccessTokenService here
-            throw new NotImplementedException();
+            // If PayPal returns 400/401/etc, signature is NOT verified
+            if (!resp.IsSuccessStatusCode)
+                return false;
+
+            using var doc = JsonDocument.Parse(json);
+
+            if (!doc.RootElement.TryGetProperty("verification_status", out var vs))
+                return false;
+
+            return string.Equals(vs.GetString(), "SUCCESS", StringComparison.OrdinalIgnoreCase);
+
         }
     }
 }
