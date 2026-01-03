@@ -1,9 +1,63 @@
 ﻿@page "/payment/success"
 @using Microsoft.AspNetCore.Components
+@using eStore.Client.Services.OrderService
+@using eStore.Shared.Dtos
+
+@inject IOrderService OrderService
 
 <h3>Payment Success</h3>
-<p>Thanks! Stripe redirected back successfully.</p>
+
+@if (string.IsNullOrWhiteSpace(OrderId))
+{
+    <p>Missing orderId.</p>
+}
+else if (loading)
+{
+    <p>Loading payment status...</p>
+}
+else if (result is null)
+{
+    <p>Order not found.</p>
+}
+else
+{
+    <p>Thank you! Your payment was completed successfully.</p>
+
+    <p>
+        <strong>Product:</strong> @result.ProductName <br />
+        <strong>Quantity:</strong> @result.Quantity <br />
+        <strong>Amount:</strong> @(result.AmountOre / 100m) @result.Currency <br /><br />        
+        <strong>Payment method:</strong> @result.PaymentProvider <br />
+        <strong>Payment status:</strong> @result.PaymentStatus  <br />
+        <strong>Paid on:</strong> @(result.PaidUtc is null ? "-" : result.PaidUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")) <br /><br />
+
+        <strong>Order reference:</strong> @result.OrderId  <br />
+        <strong>Order status:</strong> @result.OrderStatus <br />
+        
+    </p>
+
+    @if (result.PaymentStatus == "Pending")
+    {
+        <p><small>Payment is still pending. It may update shortly after webhook processing.</small></p>
+    }
+}
 
 @code {
     [Parameter, SupplyParameterFromQuery] public string? OrderId { get; set; }
+
+    private bool loading = true;
+    private PaymentResultDto? result;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        result = null;
+
+        if (Guid.TryParse(OrderId, out var oid))
+        {
+            result = await OrderService.GetPaymentResultAsync(oid);
+        }
+
+        loading = false;
+    }
 }

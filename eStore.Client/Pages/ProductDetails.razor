@@ -20,11 +20,14 @@ else
     <h4>@product!.Name</h4>
     <p>@product.Description</p>
     <p><strong>Price:</strong> @(product.PriceOre / 100.0m) @product.Currency</p>
-    <p><strong>Active:</strong> @product.IsActive</p>
+    <p><strong>Active:</strong> @product.IsActive</p> 
 
     <p style="margin-top:15px">
-        <a href="/checkout/@product!.Id">Pay by card</a>
+        <a href="/checkout/@product!.Id">Buy</a>
+        @* <button @onclick="GoToCheckout">Buy</button> *@
     </p>
+
+
 
     <p style="margin-top:15px">
         <a href="/products/edit/@product!.Id">Edit</a>
@@ -43,6 +46,12 @@ else
         product = await ProductService.GetProductByIdAsync(Id);
         notFound = product is null;
     }
+
+    // private void GoToCheckout()
+    // {
+    //     if (product is null) return;
+    //     Nav.NavigateTo($"/checkout/{product.Id}");
+    // }
 
     private async Task Delete()
     {

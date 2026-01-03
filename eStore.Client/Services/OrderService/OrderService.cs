@@ -1,4 +1,5 @@
 ﻿using eStore.Shared.Dtos;
+using System.Net;
 using System.Net.Http.Json;
 
 namespace eStore.Client.Services.OrderService
@@ -29,6 +30,16 @@ namespace eStore.Client.Services.OrderService
         public async Task<OrderDto?> GetOrderByIdAsync(Guid id)
         {
             return await _http.GetFromJsonAsync<OrderDto>($"api/orders/{id}");
+        }
+        public async Task<PaymentResultDto?> GetPaymentResultAsync(Guid orderId)
+        {
+            var resp = await _http.GetAsync($"api/orders/{orderId}/payment-result");
+
+            if (resp.StatusCode == HttpStatusCode.NotFound)
+                return null;
+
+            resp.EnsureSuccessStatusCode();
+            return await resp.Content.ReadFromJsonAsync<PaymentResultDto>();
         }
     }
 }
