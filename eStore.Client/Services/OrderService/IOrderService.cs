@@ -6,5 +6,6 @@ namespace eStore.Client.Services.OrderService
     {
         Task<OrderDto> CreateOrderAsync(OrderCreateDto dto);
         Task<OrderDto?> GetOrderByIdAsync(Guid id);
+        Task<PaymentResultDto?> GetPaymentResultAsync(Guid orderId);
     }
 }
