@@ -1,42 +1,48 @@
-﻿using System.Text.Json;
+﻿using Microsoft.Extensions.Caching.Memory;
+using System.Text.Json;
 
 namespace eStore.Server.Payments.Vipps
 {
     public sealed class VippsAccessTokenService
     {
+        private const string CacheKey = "VippsAccessToken";
         private readonly HttpClient _http;
         private readonly VippsOptions _opt;
         private readonly ILogger<VippsAccessTokenService> _logger;
+        private readonly IMemoryCache _cache;
 
         private string? _token;
         private DateTimeOffset _expiresAtUtc = DateTimeOffset.MinValue;
 
-        public VippsAccessTokenService(HttpClient http, VippsOptions opt, ILogger<VippsAccessTokenService> logger)
+        public VippsAccessTokenService(HttpClient http, VippsOptions opt, ILogger<VippsAccessTokenService> logger, IMemoryCache cache)
         {
             _http = http;
             _opt = opt;
             _logger = logger;
+            _cache = cache;
         }
 
         public async Task<string> GetTokenAsync(CancellationToken ct = default)
-        {
-            // refresh a bit early
-            if (!string.IsNullOrWhiteSpace(_token) && DateTimeOffset.UtcNow < _expiresAtUtc.AddMinutes(-2))
-                return _token!;
+        {            
+            //if (!string.IsNullOrWhiteSpace(_token) && DateTimeOffset.UtcNow < _expiresAtUtc.AddMinutes(-2))
+            //    return _token!;
+
+            if (_cache.TryGetValue<string>(CacheKey, out var cachedToken) && !string.IsNullOrWhiteSpace(cachedToken))
+                return cachedToken;
 
             if (!_opt.IsConfigured)
                 throw new InvalidOperationException("Vipps is not configured (missing keys).");
 
             using var req = new HttpRequestMessage(HttpMethod.Post, "/accesstoken/get");
-            req.Headers.Add("client_id", _opt.ClientId);
-            req.Headers.Add("client_secret", _opt.ClientSecret);
-            req.Headers.Add("Ocp-Apim-Subscription-Key", _opt.SubscriptionKey);
-            req.Headers.Add("Merchant-Serial-Number", _opt.MerchantSerialNumber);
+            req.Headers.TryAddWithoutValidation("client_id", _opt.ClientId);
+            req.Headers.TryAddWithoutValidation("client_secret", _opt.ClientSecret);
+            req.Headers.TryAddWithoutValidation("Ocp-Apim-Subscription-Key", _opt.SubscriptionKey);
+            req.Headers.TryAddWithoutValidation("Merchant-Serial-Number", _opt.MerchantSerialNumber);
 
-            req.Headers.Add("Vipps-System-Name", _opt.SystemName);
-            req.Headers.Add("Vipps-System-Version", _opt.SystemVersion);
-            req.Headers.Add("Vipps-System-Plugin-Name", _opt.PluginName);
-            req.Headers.Add("Vipps-System-Plugin-Version", _opt.PluginVersion);
+            req.Headers.TryAddWithoutValidation("Vipps-System-Name", _opt.SystemName);
+            req.Headers.TryAddWithoutValidation("Vipps-System-Version", _opt.SystemVersion);
+            req.Headers.TryAddWithoutValidation("Vipps-System-Plugin-Name", _opt.PluginName);
+            req.Headers.TryAddWithoutValidation("Vipps-System-Plugin-Version", _opt.PluginVersion);
 
             req.Content = new StringContent(""); // Vipps expects empty body
 
@@ -60,10 +66,10 @@ namespace eStore.Server.Payments.Vipps
             _ = int.TryParse(expiresInStr, out var expiresInSec);
             if (expiresInSec <= 0) expiresInSec = 3600;
 
-            _token = accessToken;
-            _expiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(expiresInSec);
+            var cacheTtl = TimeSpan.FromSeconds(Math.Max(60, expiresInSec - 120));
+            _cache.Set(CacheKey, accessToken, cacheTtl);
 
-            return _token!;
+            return accessToken!;
         }
     }
 }

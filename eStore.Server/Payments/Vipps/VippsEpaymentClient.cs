@@ -34,11 +34,11 @@ namespace eStore.Server.Payments.Vipps
             var token = await _token.GetTokenAsync(ct);
 
             using var req = new HttpRequestMessage(HttpMethod.Post, "/epayment/v1/payments");
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);           
 
-            req.Headers.Add("Ocp-Apim-Subscription-Key", _opt.SubscriptionKey);
-            req.Headers.Add("Merchant-Serial-Number", _opt.MerchantSerialNumber);
-            req.Headers.Add("Idempotency-Key", idempotencyKey);
+            req.Headers.TryAddWithoutValidation("Ocp-Apim-Subscription-Key", _opt.SubscriptionKey);
+            req.Headers.TryAddWithoutValidation("Merchant-Serial-Number", _opt.MerchantSerialNumber);
+            req.Headers.TryAddWithoutValidation("Idempotency-Key", idempotencyKey);
 
             req.Headers.Add("Vipps-System-Name", _opt.SystemName);
             req.Headers.Add("Vipps-System-Version", _opt.SystemVersion);
